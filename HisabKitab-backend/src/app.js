@@ -11,22 +11,24 @@ const shopRoutes = require("./routes/shop.routes");
 
 const app = express();
 
-// ✅ CORS (clean + correct)
-app.use(cors({
-  origin: "https://hisabkitab-frontend.vercel.app", // your frontend
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true
-}));
+// ✅ HARD FIX (this guarantees headers)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  next();
+});
 
-// ✅ Handle preflight requests
+// ✅ ALSO KEEP cors()
+app.use(cors());
+
+// ✅ Handle preflight
 app.options("*", cors());
 
-// ✅ Other middleware
 app.use(express.json());
 app.use(morgan("dev"));
 
-// ✅ Routes
+// Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/bills", billRoutes);
