@@ -13,10 +13,11 @@ const app = express();
 
 // ✅ MIDDLEWARE (ORDER MATTERS)
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
+    origin: "*",
+    credentials: true,
+  }));
+  
+  app.options("*", cors());
 
 app.use(express.json());
 app.use(morgan("dev"));
