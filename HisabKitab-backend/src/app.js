@@ -11,18 +11,17 @@ const shopRoutes = require("./routes/shop.routes");
 
 const app = express();
 
-// ✅ HARD FIX (this guarantees headers)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-});
+// ✅ Single CORS configuration – handles both preflight and actual requests
+app.use(
+  cors({
+    origin: true,               // Reflects the request origin (works for any origin, including file:// and localhost)
+    credentials: true,          // Allows Authorization header and cookies
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-// ✅ ALSO KEEP cors()
-app.use(cors());
-
-// ✅ Handle preflight
+// Handle preflight requests explicitly (optional – cors already does it)
 app.options("*", cors());
 
 app.use(express.json());
