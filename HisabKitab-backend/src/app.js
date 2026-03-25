@@ -11,18 +11,31 @@ const shopRoutes = require("./routes/shop.routes");
 
 const app = express();
 
-// ✅ Single CORS configuration – handles both preflight and actual requests
+// ✅ CORS configuration – explicit allowed origins
+const allowedOrigins = [
+  "https://hisabkitab-frontend.vercel.app",  // Your production frontend
+  "http://localhost:3000",                  // For local development
+  "http://127.0.0.1:3000"
+];
+
 app.use(
   cors({
-    origin: true,               // Reflects the request origin (works for any origin, including file:// and localhost)
-    credentials: true,          // Allows Authorization header and cookies
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = "The CORS policy for this site does not allow access from the specified Origin.";
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,        // Required for Authorization header
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// Handle preflight requests explicitly (optional – cors already does it)
-app.options("*", cors());
+// Remove the redundant app.options("*", cors()) – cors middleware already handles preflight
 
 app.use(express.json());
 app.use(morgan("dev"));
