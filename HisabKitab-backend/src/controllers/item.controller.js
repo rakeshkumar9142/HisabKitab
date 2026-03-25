@@ -1,15 +1,25 @@
-const Item = require("../models/item");
+const Item = require("../models/Item");
 
 // CREATE ITEM
 exports.createItem = async (req, res) => {
 
-  const { name, price, unit } = req.body;
+  const { name, price, unit, stock, lowStockThreshold } = req.body;
+
+  // Optional inventory fields (kept optional for legacy items).
+  const stockNum =
+    stock === undefined || stock === '' ? undefined : Number(stock);
+  const lowStockThresholdNum =
+    lowStockThreshold === undefined || lowStockThreshold === ''
+      ? undefined
+      : Number(lowStockThreshold);
 
   const item = await Item.create({
     shop: req.user._id,
     name,
     price,
-    unit
+    unit,
+    stock: stockNum,
+    lowStockThreshold: lowStockThresholdNum
   });
 
   res.status(201).json(item);
@@ -40,9 +50,18 @@ exports.updateItem = async (req, res) => {
     return res.status(404).json({ message: "Item not found" });
   }
 
-  item.name = req.body.name || item.name;
-  item.price = req.body.price || item.price;
-  item.unit = req.body.unit || item.unit;
+  if (req.body.name !== undefined) item.name = req.body.name;
+  if (req.body.price !== undefined) item.price = req.body.price;
+  if (req.body.unit !== undefined) item.unit = req.body.unit;
+
+  if (req.body.stock !== undefined) {
+    item.stock = req.body.stock === '' ? undefined : Number(req.body.stock);
+  }
+
+  if (req.body.lowStockThreshold !== undefined) {
+    item.lowStockThreshold =
+      req.body.lowStockThreshold === '' ? undefined : Number(req.body.lowStockThreshold);
+  }
 
   await item.save();
   res.json(item);

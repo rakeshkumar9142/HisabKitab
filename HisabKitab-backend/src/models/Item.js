@@ -20,6 +20,14 @@ const itemSchema = new mongoose.Schema(
       type: String,
       default: "pcs" // pcs, kg, litre
     },
+    // Optional inventory tracking. If unset (legacy items), billing will still work
+    // but stock will not be decremented.
+    stock: {
+      type: Number,
+    },
+    lowStockThreshold: {
+      type: Number,
+    },
     isActive: {
       type: Boolean,
       default: true
