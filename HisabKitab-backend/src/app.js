@@ -11,18 +11,22 @@ const shopRoutes = require("./routes/shop.routes");
 
 const app = express();
 
-// ✅ MIDDLEWARE (ORDER MATTERS)
+// ✅ CORS (clean + correct)
 app.use(cors({
-    origin: "*",
-    credentials: true,
-  }));
-  
-  app.options("*", cors());
+  origin: "https://hisabkitab-frontend.vercel.app", // your frontend
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+}));
 
+// ✅ Handle preflight requests
+app.options("*", cors());
+
+// ✅ Other middleware
 app.use(express.json());
 app.use(morgan("dev"));
 
-// ✅ ROUTES
+// ✅ Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/bills", billRoutes);
