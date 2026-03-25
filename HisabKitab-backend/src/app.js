@@ -13,9 +13,10 @@ const app = express();
 
 // ✅ CORS configuration – explicit allowed origins
 const allowedOrigins = [
-    "https://hisabkitap-frontend.vercel.app",   // <-- match the exact spelling
-    "http://localhost:3000",
-    "http://127.0.0.1:3000"
+    "https://hisabkitab-frontend.vercel.app",   // correct spelling
+  "https://hisabkitap-frontend.vercel.app",   // the one actually being used (if different)
+  "http://localhost:3000",
+  "http://127.0.0.1:3000"
   ];
 
 app.use(
