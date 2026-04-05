@@ -1,18 +1,20 @@
 const User = require("../models/User.js");
 const jwt = require("jsonwebtoken");
-const { JWT_SECRET, JWT_EXPIRES_IN } = require("../config/jwt");
+const { JWT_SECRET: JWT_SECRET_FALLBACK, JWT_EXPIRES_IN } = require("../config/jwt");
 const { isSubscriptionActive } = require("../services/subscription.service");
 
+const getJwtSecret = () => process.env.JWT_SECRET || JWT_SECRET_FALLBACK;
+
 const generateToken = (id) => {
-
-  return jwt.sign(
-
-    { id }, 
-    JWT_SECRET, 
-    { expiresIn: JWT_EXPIRES_IN }
-
-    );
+  const sub = userIdToString(id);
+  return jwt.sign({ id: sub }, getJwtSecret(), { expiresIn: JWT_EXPIRES_IN });
 };
+
+function userIdToString(id) {
+  if (id == null) return "";
+  if (typeof id.toString === "function") return id.toString();
+  return String(id);
+}
 
 exports.register = async (req, res) => {
   const { name, phone, password } = req.body;
@@ -23,14 +25,15 @@ exports.register = async (req, res) => {
 
   const user = await User.create({ name, phone, password });
 
+  const token = generateToken(user._id);
   res.status(201).json({
-
-    _id: user._id,
-    name: user.name,
-    token: generateToken(user._id)
-    
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      phone: user.phone,
+    },
   });
-
 };
 
 exports.login = async (req, res) => {
@@ -42,17 +45,21 @@ exports.login = async (req, res) => {
   if (!user || !(await user.matchPassword(password)))
     return res.status(401).json({ message: "Invalid credentials" });
 
+  const token = generateToken(user._id);
   res.json({
-    _id: user._id,
-    name: user.name,
-    token: generateToken(user._id)
+    token,
+    user: {
+      _id: user._id,
+      name: user.name,
+      phone: user.phone,
+    },
   });
-
-
 };
 
 exports.getMe = async (req, res) => {
-  // `protect` already sets `req.user` for us.
+  if (!req.user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   const user = req.user;
   res.json({
     _id: user._id,
@@ -64,6 +71,9 @@ exports.getMe = async (req, res) => {
 };
 
 exports.updateMe = async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
   const { name } = req.body;
 
   if (name !== undefined) {

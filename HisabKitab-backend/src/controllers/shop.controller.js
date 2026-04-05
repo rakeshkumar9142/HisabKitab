@@ -1,4 +1,7 @@
+const { assertReqUser } = require("../utils/assertReqUser");
+
 exports.renewSubscription = async (req, res) => {
+    if (!assertReqUser(req, res)) return;
     const oneYear = 365 * 24 * 60 * 60 * 1000;
   
     req.user.subscription = {

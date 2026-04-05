@@ -19,6 +19,9 @@ export function AuthProvider({ children }) {
 
   const persistAuth = useCallback((data) => {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data))
+    if (data?.token) {
+      localStorage.setItem('token', data.token)
+    }
     setAuth(data)
   }, [])
 
@@ -37,6 +40,7 @@ export function AuthProvider({ children }) {
       subscriptionActive: Boolean(me.subscriptionActive),
     }
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+    if (next.token) localStorage.setItem('token', next.token)
     setAuth(next)
   }, [])
 
@@ -65,6 +69,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem(AUTH_STORAGE_KEY)
+    localStorage.removeItem('token')
     setAuth(null)
   }, [])
 
@@ -81,6 +86,7 @@ export function AuthProvider({ children }) {
         token: prev?.token,
       }
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+      if (next.token) localStorage.setItem('token', next.token)
       return next
     })
     return me

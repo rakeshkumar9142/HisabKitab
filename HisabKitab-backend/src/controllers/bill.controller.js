@@ -1,15 +1,21 @@
 const Bill = require("../models/Bill");
 const Item = require("../models/Item");
 const { generateReceiptText } = require("../services/receipt.service");
+const { assertReqUser } = require("../utils/assertReqUser");
 
 // CREATE BILL
 exports.createBill = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
   const { items, paymentMethod } = req.body;
   /**
    * items = [
    *   { itemId: "...", quantity: 2 }
    * ]
    */
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: "items must be a non-empty array" });
+  }
 
   let billItems = [];
   let total = 0;
@@ -100,6 +106,7 @@ exports.createBill = async (req, res) => {
 
 // GET BILLS (history)
 exports.getBills = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
   const bills = await Bill.find({ shop: req.user._id })
     .sort({ createdAt: -1 })
     .limit(50);

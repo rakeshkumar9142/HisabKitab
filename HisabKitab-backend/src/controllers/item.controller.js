@@ -1,7 +1,9 @@
 const Item = require("../models/Item");
+const { assertReqUser } = require("../utils/assertReqUser");
 
 // CREATE ITEM
 exports.createItem = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
 
   const { name, price, unit, stock, lowStockThreshold } = req.body;
 
@@ -28,6 +30,7 @@ exports.createItem = async (req, res) => {
 
 // GET ALL ITEMS (shop-wise)
 exports.getItems = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
 
   const items = await Item.find({
     shop: req.user._id,
@@ -40,6 +43,7 @@ exports.getItems = async (req, res) => {
 
 // UPDATE ITEM
 exports.updateItem = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
 
   const item = await Item.findOne({
     _id: req.params.id,
@@ -70,6 +74,7 @@ exports.updateItem = async (req, res) => {
 
 // DELETE ITEM (soft delete)
 exports.deleteItem = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
 
   const item = await Item.findOne({
     _id: req.params.id,

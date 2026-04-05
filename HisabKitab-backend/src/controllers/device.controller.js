@@ -1,8 +1,10 @@
 const Device = require("../models/Device");
 const crypto = require("crypto");
+const { assertReqUser } = require("../utils/assertReqUser");
 
 // REGISTER DEVICE
 exports.registerDevice = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
   const { name } = req.body;
 
   const deviceToken = crypto.randomBytes(24).toString("hex");
@@ -21,6 +23,7 @@ exports.registerDevice = async (req, res) => {
 
 // GET DEVICES
 exports.getDevices = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
   const devices = await Device.find({
     shop: req.user._id,
     isActive: true
@@ -31,6 +34,7 @@ exports.getDevices = async (req, res) => {
 
 // DISABLE DEVICE
 exports.disableDevice = async (req, res) => {
+  if (!assertReqUser(req, res)) return;
   const device = await Device.findOne({
     _id: req.params.id,
     shop: req.user._id

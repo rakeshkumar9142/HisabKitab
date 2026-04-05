@@ -11,15 +11,17 @@ const shopRoutes = require("./routes/shop.routes");
 
 const app = express();
 
-// ✅ SIMPLE + SAFE CORS (NO CRASH, NO 500)
-app.use(cors({
-  origin: "*",   // allow all (for now)
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+// CORS: `origin: "*"` cannot be used with `credentials: true` in browsers.
+// Reflecting the request origin allows credentials + any caller (typical for API + separate Nginx host).
+const corsOptions = {
+  origin: (origin, callback) => callback(null, true),
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-}));
+};
 
-// ✅ Handle preflight properly
-app.options("*", cors());
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 // ✅ Middleware
 app.use(express.json());
@@ -35,6 +37,15 @@ app.use("/api/shop", shopRoutes);
 // ✅ Default route (for testing)
 app.get("/", (req, res) => {
   res.send("API is running...");
+});
+
+// Central error handler — avoids silent crashes; async errors via express-async-errors
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  console.error("[server]", err?.stack || err?.message || err);
+  res.status(500).json({ message: "Server error" });
 });
 
 module.exports = app;
