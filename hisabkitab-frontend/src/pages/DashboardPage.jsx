@@ -1,176 +1,174 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import PageCard from '../components/PageCard.jsx'
-import { getBills } from '../services/billService.js'
-import { getDevices } from '../services/deviceService.js'
-import { getItems } from '../services/itemService.js'
 import AlertBox from '../components/AlertBox.jsx'
+import SalesChart7 from '../components/SalesChart7.jsx'
+import { getBills } from '../services/billService.js'
+import { getItems } from '../services/itemService.js'
+import { getDevices } from '../services/deviceService.js'
+import { getErrorMessage } from '../services/api.js'
 
-function getLocalISODate(d) {
-  const dt = new Date(d)
-  const year = dt.getFullYear()
-  const month = String(dt.getMonth() + 1).padStart(2, '0')
-  const day = String(dt.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+function startOfLocalDay(d) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
 }
 
-function addDays(baseDate, deltaDays) {
-  const d = new Date(baseDate)
-  d.setDate(d.getDate() + deltaDays)
-  return d
+function formatDayKey(d) {
+  const x = new Date(d)
+  const y = x.getFullYear()
+  const m = String(x.getMonth() + 1).padStart(2, '0')
+  const day = String(x.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
-function SalesBarsChart({ values }) {
-  const max = Math.max(...values.map((v) => v.value), 0.0001)
+function DashboardPage() {
+  const [bills, setBills] = useState([])
+  const [itemsCount, setItemsCount] = useState(0)
+  const [devicesCount, setDevicesCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const [billsData, itemsData, devicesData] = await Promise.all([getBills(), getItems(), getDevices()])
+      setBills(Array.isArray(billsData) ? billsData : [])
+      setItemsCount(Array.isArray(itemsData) ? itemsData.length : 0)
+      setDevicesCount(Array.isArray(devicesData) ? devicesData.length : 0)
+    } catch (err) {
+      setError(getErrorMessage(err, 'Failed to load dashboard'))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const todayStats = useMemo(() => {
+    const start = startOfLocalDay(new Date())
+    const end = new Date(start)
+    end.setDate(end.getDate() + 1)
+
+    let total = 0
+    let count = 0
+    for (const b of bills) {
+      const t = new Date(b.createdAt)
+      if (t >= start && t < end) {
+        total += Number(b.totalAmount) || 0
+        count += 1
+      }
+    }
+    return { total, count }
+  }, [bills])
+
+  const chartSeries = useMemo(() => {
+    const days = []
+    for (let i = 6; i >= 0; i -= 1) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      days.push(startOfLocalDay(d))
+    }
+
+    const totals = new Map()
+    days.forEach((d) => totals.set(formatDayKey(d), 0))
+
+    for (const b of bills) {
+      const key = formatDayKey(b.createdAt)
+      if (totals.has(key)) {
+        totals.set(key, totals.get(key) + (Number(b.totalAmount) || 0))
+      }
+    }
+
+    return days.map((d) => {
+      const key = formatDayKey(d)
+      const weekday = d.toLocaleDateString(undefined, { weekday: 'short' })
+      return {
+        key,
+        label: d.toLocaleDateString(),
+        shortLabel: weekday,
+        total: totals.get(key) || 0,
+      }
+    })
+  }, [bills])
 
   return (
-    <div className="mt-2">
-      <div className="flex items-end gap-2">
-        {values.map((v) => {
-          const pct = (v.value / max) * 100
-          return (
-            <div key={v.key} className="flex-1">
-              <div
-                className="h-28 w-full rounded-md bg-blue-50 ring-1 ring-blue-100"
-                aria-label={`${v.label}: Rs ${v.value.toFixed(2)}`}
-              >
-                <div
-                  className="w-full rounded-md bg-blue-200"
-                  style={{ height: `${Math.max(6, pct)}%` }}
-                  title={`Rs ${v.value.toFixed(2)}`}
-                />
-              </div>
-              <div className="mt-2 text-center text-[11px] text-slate-600">
-                {v.label}
-              </div>
-            </div>
-          )
-        })}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-bold text-slate-800">Dashboard</h2>
+        <button
+          type="button"
+          onClick={load}
+          disabled={loading}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 disabled:opacity-50"
+        >
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      <AlertBox message={error} />
+
+      <div className="grid grid-cols-2 gap-3">
+        <PageCard title="Today's sales">
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-900">Rs {todayStats.total.toFixed(2)}</p>
+          )}
+        </PageCard>
+        <PageCard title="Bills today">
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-900">{todayStats.count}</p>
+          )}
+        </PageCard>
+        <PageCard title="Items in catalog">
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-900">{itemsCount}</p>
+          )}
+        </PageCard>
+        <PageCard title="Active devices">
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : (
+            <p className="text-2xl font-bold text-slate-900">{devicesCount}</p>
+          )}
+        </PageCard>
+      </div>
+
+      <PageCard title="Last 7 days sales">
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : (
+          <>
+            <SalesChart7 series={chartSeries} />
+            <p className="mt-2 text-xs text-slate-500">
+              Based on your latest bills from the server (up to 50 most recent). For busier shops, increase the API
+              limit later.
+            </p>
+          </>
+        )}
+      </PageCard>
+
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to="/app/billing"
+          className="inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"
+        >
+          New bill
+        </Link>
+        <Link to="/app/items" className="inline-flex rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+          Manage items
+        </Link>
       </div>
     </div>
   )
 }
 
-function DashboardPage() {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [items, setItems] = useState([])
-  const [bills, setBills] = useState([])
-  const [devices, setDevicesState] = useState([])
-
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      setError('')
-      try {
-        const [itemsData, billsData, devicesData] = await Promise.all([
-          getItems(),
-          getBills(),
-          getDevices(),
-        ])
-        setItems(itemsData)
-        setBills(billsData)
-        setDevicesState(devicesData)
-      } catch (err) {
-        setError(err?.response?.data?.message || 'Failed to load dashboard data')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
-
-  const derived = useMemo(() => {
-    const todayKey = getLocalISODate(new Date())
-
-    const dayKeys = Array.from({ length: 7 }).map((_, idx) => {
-      const d = addDays(new Date(), idx - 6)
-      return getLocalISODate(d)
-    })
-
-    const todaySales = bills
-      .filter((b) => getLocalISODate(b.createdAt) === todayKey)
-      .reduce((sum, b) => sum + Number(b.totalAmount || 0), 0)
-
-    const todayBillsCount = bills.filter(
-      (b) => getLocalISODate(b.createdAt) === todayKey,
-    ).length
-
-    const totalItems = items.length
-    const activeDevices = devices.filter((d) => d.isActive !== false).length
-
-    const salesByDay = new Map(dayKeys.map((k) => [k, 0]))
-    bills.forEach((b) => {
-      const key = getLocalISODate(b.createdAt)
-      if (!salesByDay.has(key)) return
-      salesByDay.set(key, salesByDay.get(key) + Number(b.totalAmount || 0))
-    })
-
-    const chartValues = dayKeys.map((k) => {
-      const dt = new Date(`${k}T00:00:00`)
-      const label = dt.toLocaleDateString(undefined, { weekday: 'short' })
-      return { key: k, label, value: salesByDay.get(k) ?? 0 }
-    })
-
-    return {
-      todayKey,
-      todaySales,
-      todayBillsCount,
-      totalItems,
-      activeDevices,
-      chartValues,
-    }
-  }, [bills, items.length, devices])
-
-  return (
-    <PageCard title="Dashboard">
-      <div className="space-y-3">
-        <AlertBox message={error} />
-
-        {loading && (
-          <div className="text-sm text-slate-600">Loading dashboard...</div>
-        )}
-
-        {!loading && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs text-slate-600">Today&apos;s Sales</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  Rs {derived.todaySales.toFixed(2)}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs text-slate-600">Total Bills Today</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {derived.todayBillsCount}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs text-slate-600">Total Items</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {derived.totalItems}
-                </div>
-              </div>
-              <div className="rounded-lg border border-slate-200 p-3">
-                <div className="text-xs text-slate-600">Active Devices</div>
-                <div className="mt-1 text-lg font-semibold text-slate-900">
-                  {derived.activeDevices}
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg border border-slate-200 p-3">
-              <div className="text-sm font-semibold text-slate-800">
-                Last 7 Days Sales
-              </div>
-              <SalesBarsChart values={derived.chartValues} />
-            </div>
-          </>
-        )}
-      </div>
-    </PageCard>
-  )
-}
-
 export default DashboardPage
-

@@ -1,4 +1,4 @@
-import { Link, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
 import BottomNav from '../components/BottomNav.jsx'
 
@@ -13,21 +13,13 @@ function DashboardLayout() {
             <h1 className="text-lg font-bold text-slate-800">HisabKitab POS</h1>
             <p className="text-xs text-slate-500">Welcome, {user?.name}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Link
-              to="/profile"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              Profile
-            </Link>
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              Logout
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+          >
+            Logout
+          </button>
         </div>
       </header>
 

@@ -8,14 +8,14 @@ function LoginPage() {
   const { isAuthenticated, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = location.state?.from?.pathname || '/'
+  const from = location.state?.from?.pathname || '/app'
 
   const [form, setForm] = useState({ phone: '', password: '' })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/app" replace />
   }
 
   const handleChange = (e) => {

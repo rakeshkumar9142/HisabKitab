@@ -7,14 +7,19 @@ import { getBills } from '../services/billService.js'
 function BillsHistoryPage() {
   const [bills, setBills] = useState([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadBills = async () => {
+      setLoading(true)
+      setError('')
       try {
         const data = await getBills()
         setBills(data)
       } catch (err) {
         setError(getErrorMessage(err, 'Failed to load bills history'))
+      } finally {
+        setLoading(false)
       }
     }
     loadBills()
@@ -24,7 +29,9 @@ function BillsHistoryPage() {
     <PageCard title="Bills History">
       <div className="space-y-3">
         <AlertBox message={error} />
-        {bills.length === 0 ? (
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading bills…</p>
+        ) : bills.length === 0 ? (
           <p className="text-sm text-slate-500">No bills yet.</p>
         ) : (
           bills.map((bill) => (

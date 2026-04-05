@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import AlertBox from '../components/AlertBox.jsx'
 import PageCard from '../components/PageCard.jsx'
 import { disableDevice, getDevices, registerDevice } from '../services/deviceService.js'
@@ -10,48 +10,58 @@ function DevicesPage() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [newDeviceToken, setNewDeviceToken] = useState('')
+  const [loadingList, setLoadingList] = useState(true)
+  const [registering, setRegistering] = useState(false)
+  const [disablingId, setDisablingId] = useState('')
 
-  const loadDevices = async () => {
+  const loadDevices = useCallback(async () => {
+    setLoadingList(true)
+    setError('')
     try {
       const data = await getDevices()
       setDevices(data)
     } catch (err) {
       setError(getErrorMessage(err, 'Failed to load devices'))
+    } finally {
+      setLoadingList(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => {
-      loadDevices()
-    }, 0)
-    return () => clearTimeout(t)
-  }, [])
+    loadDevices()
+  }, [loadDevices])
 
   const handleRegister = async (e) => {
     e.preventDefault()
     setError('')
     setSuccess('')
     setNewDeviceToken('')
+    setRegistering(true)
     try {
       const data = await registerDevice({ name })
-      setSuccess('Device registered successfully')
+      setSuccess('Device registered successfully — copy the token to Profile → Print bridge for printing.')
       setNewDeviceToken(data.deviceToken)
       setName('')
       loadDevices()
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to register device'))
+    } finally {
+      setRegistering(false)
     }
   }
 
   const handleDisable = async (id) => {
     setError('')
     setSuccess('')
+    setDisablingId(id)
     try {
       await disableDevice(id)
       setSuccess('Device disabled')
       loadDevices()
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to disable device'))
+    } finally {
+      setDisablingId('')
     }
   }
 
@@ -68,8 +78,12 @@ function DevicesPage() {
             className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-500"
             required
           />
-          <button type="submit" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white">
-            Register Device
+          <button
+            type="submit"
+            disabled={registering}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
+          >
+            {registering ? 'Registering…' : 'Register Device'}
           </button>
           {newDeviceToken && (
             <p className="rounded-lg bg-amber-50 p-2 text-xs text-amber-800">
@@ -81,7 +95,9 @@ function DevicesPage() {
 
       <PageCard title="Active Devices">
         <div className="space-y-2">
-          {devices.length === 0 ? (
+          {loadingList ? (
+            <p className="text-sm text-slate-500">Loading devices…</p>
+          ) : devices.length === 0 ? (
             <p className="text-sm text-slate-500">No active devices found.</p>
           ) : (
             devices.map((device) => (
@@ -91,9 +107,10 @@ function DevicesPage() {
                 <button
                   type="button"
                   onClick={() => handleDisable(device._id)}
-                  className="mt-2 rounded-md bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700"
+                  disabled={Boolean(disablingId)}
+                  className="mt-2 rounded-md bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700 disabled:opacity-50"
                 >
-                  Disable Device
+                  {disablingId === device._id ? 'Disabling…' : 'Disable Device'}
                 </button>
               </div>
             ))

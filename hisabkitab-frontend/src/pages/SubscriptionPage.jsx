@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import AlertBox from '../components/AlertBox.jsx'
 import PageCard from '../components/PageCard.jsx'
+import { useAuth } from '../context/AuthContext.jsx'
 import { getErrorMessage } from '../services/api.js'
 import { getBills } from '../services/billService.js'
 import { renewSubscription } from '../services/shopService.js'
 
 function SubscriptionPage() {
+  const { refreshProfile } = useAuth()
   const [status, setStatus] = useState('Unknown')
   const [expiresAt, setExpiresAt] = useState('')
   const [error, setError] = useState('')
@@ -42,6 +44,7 @@ function SubscriptionPage() {
       setStatus('Active')
       setExpiresAt(data.expiresAt)
       setSuccess(data.message || 'Subscription renewed successfully')
+      await refreshProfile().catch(() => {})
     } catch (err) {
       setError(getErrorMessage(err, 'Renew subscription failed'))
     } finally {

@@ -12,7 +12,7 @@ function RegisterPage() {
   const [error, setError] = useState('')
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/app" replace />
   }
 
   const handleChange = (e) => {
@@ -25,7 +25,7 @@ function RegisterPage() {
     setLoading(true)
     try {
       await register(form)
-      navigate('/', { replace: true })
+      navigate('/app', { replace: true })
     } catch (err) {
       setError(getErrorMessage(err, 'Registration failed'))
     } finally {

@@ -1,12 +1,11 @@
 import { NavLink } from 'react-router-dom'
 
 const navItems = [
-  { to: '/', label: 'Billing', end: true },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/items', label: 'Items' },
-  { to: '/bills', label: 'Bills' },
-  { to: '/devices', label: 'Devices' },
-  { to: '/subscription', label: 'Plan' },
+  { to: '/app', label: 'Home', end: true },
+  { to: '/app/billing', label: 'Bill' },
+  { to: '/app/items', label: 'Items' },
+  { to: '/app/bills', label: 'Bills' },
+  { to: '/app/profile', label: 'Profile' },
 ]
 
 function BottomNav() {

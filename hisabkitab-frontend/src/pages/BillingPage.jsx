@@ -1,123 +1,126 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import AlertBox from '../components/AlertBox.jsx'
+import ItemSearchCombobox from '../components/ItemSearchCombobox.jsx'
 import PageCard from '../components/PageCard.jsx'
+import QuickAddItemModal from '../components/QuickAddItemModal.jsx'
 import { createBill } from '../services/billService.js'
 import { getErrorMessage } from '../services/api.js'
-import { createItem, getItems } from '../services/itemService.js'
-import { getDevices } from '../services/deviceService.js'
-import QuickAddItemModal from '../components/QuickAddItemModal.jsx'
-import ItemAutocompleteInput from '../components/ItemAutocompleteInput.jsx'
+import { getItems } from '../services/itemService.js'
+import { getPrintDeviceToken, printReceipt } from '../services/printService.js'
 
 const PAYMENT_METHODS = ['cash', 'upi', 'card']
 
+function getItemById(catalog, id) {
+  return catalog.find((x) => String(x._id) === String(id))
+}
+
+function stockIssue(item, qty) {
+  if (typeof item?.stock !== 'number' || !Number.isFinite(item.stock)) return null
+  if (qty > item.stock) return `Only ${item.stock} in stock`
+  return null
+}
+
 function BillingPage() {
   const [catalog, setCatalog] = useState([])
-  const [rows, setRows] = useState([{ itemId: '', quantity: 1, query: '' }])
+  const [rows, setRows] = useState([{ itemId: '', quantity: 1 }])
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [result, setResult] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-
   const [quickAddOpen, setQuickAddOpen] = useState(false)
-  const [quickAddSubmitting, setQuickAddSubmitting] = useState(false)
-
-  const [deviceToken, setDeviceToken] = useState('')
-  const [printing, setPrinting] = useState(false)
+  const [quickAddRowIndex, setQuickAddRowIndex] = useState(null)
+  const [printLoading, setPrintLoading] = useState(false)
+  const [printMessage, setPrintMessage] = useState('')
   const [printError, setPrintError] = useState('')
-  const [printSuccess, setPrintSuccess] = useState('')
 
-  const itemInputRefs = useRef({})
-  const qtyInputRefs = useRef({})
-  const paymentMethodRef = useRef(null)
+  const searchRefs = useRef([])
+  const qtyRefs = useRef([])
+  const didAutoFocusSearch = useRef(false)
 
-  useEffect(() => {
-    const loadCatalog = async () => {
+  const loadItems = useCallback(async () => {
+    try {
       const data = await getItems()
       setCatalog(data)
-      return data
-    }
-
-    loadCatalog().catch((err) => {
+    } catch (err) {
       setError(getErrorMessage(err, 'Failed to fetch items for billing'))
-    })
+    }
   }, [])
 
   useEffect(() => {
-    // Use last registered device for printing (local POS bridge needs it).
-    const stored = localStorage.getItem('hisabkitab_print_device_token')
-    if (stored) {
-      setDeviceToken(stored)
-      return
-    }
+    loadItems()
+  }, [loadItems])
 
-    getDevices()
-      .then((devs) => {
-        const first = devs?.[0]
-        if (first?.deviceToken) {
-          localStorage.setItem('hisabkitab_print_device_token', first.deviceToken)
-          setDeviceToken(first.deviceToken)
-        }
-      })
-      .catch(() => {
-        // Don't block billing if device lookup fails; user can register a device later.
-      })
-  }, [])
+  useEffect(() => {
+    if (didAutoFocusSearch.current || catalog.length === 0) return
+    didAutoFocusSearch.current = true
+    queueMicrotask(() => searchRefs.current[0]?.focus())
+  }, [catalog.length])
 
-  const fetchItems = async () => {
-    const data = await getItems()
-    setCatalog(data)
-    return data
+  useEffect(() => {
+    searchRefs.current = searchRefs.current.slice(0, rows.length)
+    qtyRefs.current = qtyRefs.current.slice(0, rows.length)
+  }, [rows.length])
+
+  const openQuickAdd = (rowIndex) => {
+    setQuickAddRowIndex(rowIndex)
+    setQuickAddOpen(true)
   }
 
-  const handleQuickAddCreate = async ({ name, price, unit }) => {
-    setQuickAddSubmitting(true)
-    try {
-      const created = await createItem({ name, price, unit })
-      await fetchItems()
-
-      // Auto-select the new item in the first empty row (optional UX improvement).
-      setRows((prev) => {
-        const emptyIndex = prev.findIndex((r) => !r.itemId)
-        if (emptyIndex === -1) return prev
-        return prev.map((r, i) =>
-          i === emptyIndex
-            ? { ...r, itemId: created._id, query: created.name }
-            : r,
-        )
-      })
-
-      return created
-    } finally {
-      setQuickAddSubmitting(false)
-    }
+  const closeQuickAdd = () => {
+    setQuickAddOpen(false)
+    setQuickAddRowIndex(null)
   }
-
-  const estimatedTotal = useMemo(() => {
-    return rows.reduce((sum, row) => {
-      const item = catalog.find((x) => x._id === row.itemId)
-      if (!item) return sum
-      return sum + Number(item.price) * Number(row.quantity || 0)
-    }, 0)
-  }, [catalog, rows])
 
   const updateRow = (index, patch) => {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
+  const handleQuickAddCreated = async (item) => {
+    const rowIdx = quickAddRowIndex
+    await loadItems()
+    if (rowIdx != null && item?._id) {
+      updateRow(rowIdx, { itemId: item._id })
+    }
+  }
+
+  const estimatedTotal = useMemo(() => {
+    return rows.reduce((sum, row) => {
+      const item = getItemById(catalog, row.itemId)
+      if (!item) return sum
+      return sum + Number(item.price) * Number(row.quantity || 0)
+    }, 0)
+  }, [catalog, rows])
+
+  const addRowAndFocusSearch = useCallback(() => {
+    setRows((prev) => {
+      const next = [...prev, { itemId: '', quantity: 1 }]
+      const idx = next.length - 1
+      queueMicrotask(() => searchRefs.current[idx]?.focus())
+      return next
+    })
+  }, [])
+
   const addRow = () => {
-    setRows((prev) => [...prev, { itemId: '', quantity: 1, query: '' }])
+    setRows((prev) => [...prev, { itemId: '', quantity: 1 }])
   }
 
   const removeRow = (index) => {
     setRows((prev) => prev.filter((_, i) => i !== index))
   }
 
+  const handleQtyKeyDown = (e, index) => {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    e.preventDefault()
+    addRowAndFocusSearch()
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setResult(null)
+    setPrintMessage('')
     setPrintError('')
-    setPrintSuccess('')
 
     const validItems = rows
       .filter((row) => row.itemId && Number(row.quantity) > 0)
@@ -131,13 +134,22 @@ function BillingPage() {
       return
     }
 
+    for (const line of validItems) {
+      const item = getItemById(catalog, line.itemId)
+      const msg = stockIssue(item, line.quantity)
+      if (msg) {
+        setError(`${item?.name || 'Item'}: ${msg}`)
+        return
+      }
+    }
+
     setLoading(true)
     try {
       const bill = await createBill({ items: validItems, paymentMethod })
       setResult(bill)
-      setRows([{ itemId: '', quantity: 1, query: '' }])
-      setPrintError('')
-      setPrintSuccess('')
+      setRows([{ itemId: '', quantity: 1 }])
+      queueMicrotask(() => searchRefs.current[0]?.focus())
+      await loadItems()
     } catch (err) {
       setError(getErrorMessage(err, 'Unable to generate bill'))
     } finally {
@@ -146,41 +158,23 @@ function BillingPage() {
   }
 
   const handlePrint = async () => {
-    if (!deviceToken) {
-      setPrintError('No device registered for printing. Register a device first.')
-      setPrintSuccess('')
-      return
-    }
-
-    if (!result?.receiptText) {
-      setPrintError('No receipt text to print. Generate a bill first.')
-      setPrintSuccess('')
-      return
-    }
-
-    setPrinting(true)
+    setPrintMessage('')
     setPrintError('')
-    setPrintSuccess('')
+    const deviceToken = getPrintDeviceToken()
+    if (!deviceToken) {
+      setPrintError('Save a print device token in Profile first.')
+      return
+    }
+    if (!result?.receiptText) return
+
+    setPrintLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:8080/print', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          deviceToken,
-          receiptText: result.receiptText,
-        }),
-      })
-
-      if (!res.ok) {
-        const bodyText = await res.text().catch(() => '')
-        throw new Error(bodyText || `Print failed (${res.status})`)
-      }
-
-      setPrintSuccess('Printed successfully')
+      await printReceipt({ deviceToken, receiptText: result.receiptText })
+      setPrintMessage('Printed successfully')
     } catch (err) {
-      setPrintError(err?.message || 'Failed to print')
+      setPrintError(getErrorMessage(err, 'Print failed. Is the bridge running on 127.0.0.1:8080?'))
     } finally {
-      setPrinting(false)
+      setPrintLoading(false)
     }
   }
 
@@ -190,88 +184,60 @@ function BillingPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <AlertBox message={error} />
 
-          {rows.map((row, index) => (
-            <div key={index} className="grid grid-cols-12 gap-2">
-              <ItemAutocompleteInput
-                ref={(el) => {
-                  itemInputRefs.current[index] = el
-                }}
-                items={catalog}
-                value={row.query}
-                onValueChange={(val) => updateRow(index, { itemId: '', query: val })}
-                onSelectItem={(item) => {
-                  updateRow(index, { itemId: item._id, query: item.name })
-                  setTimeout(
-                    () => qtyInputRefs.current[index]?.focus(),
-                    0,
-                  )
-                }}
-                onTabToQuantity={() => qtyInputRefs.current[index]?.focus()}
-                placeholder="Item name"
-              />
-              <input
-                ref={(el) => {
-                  qtyInputRefs.current[index] = el
-                }}
-                type="number"
-                value={row.quantity}
-                onChange={(e) => updateRow(index, { quantity: e.target.value })}
-                min="1"
-                className="col-span-3 rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-blue-500"
-                inputMode="numeric"
-                onFocus={(e) => e.target.select()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    const nextIndex = index + 1
-                    if (nextIndex >= rows.length) {
-                      addRow()
-                      setTimeout(
-                        () => itemInputRefs.current[nextIndex]?.focus(),
-                        0,
-                      )
-                    } else {
-                      setTimeout(
-                        () => itemInputRefs.current[nextIndex]?.focus(),
-                        0,
-                      )
-                    }
-                  }
+          {rows.map((row, index) => {
+            const item = getItemById(catalog, row.itemId)
+            const qty = Number(row.quantity) || 0
+            const stockWarn = item ? stockIssue(item, qty) : null
 
-                  if (e.key === 'Tab') {
-                    e.preventDefault()
-                    const nextIndex = index + 1
-                    if (nextIndex >= rows.length) {
-                      setTimeout(() => paymentMethodRef.current?.focus(), 0)
-                    } else {
-                      setTimeout(
-                        () => itemInputRefs.current[nextIndex]?.focus(),
-                        0,
-                      )
-                    }
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => removeRow(index)}
-                disabled={rows.length === 1}
-                className="col-span-2 rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-600 disabled:opacity-40"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setQuickAddOpen(true)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
-            >
-              + Add New Item
-            </button>
-          </div>
+            return (
+              <div key={index} className="space-y-2 rounded-lg border border-slate-100 p-2">
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-7">
+                    <ItemSearchCombobox
+                      ref={(el) => {
+                        searchRefs.current[index] = el
+                      }}
+                      items={catalog}
+                      value={row.itemId}
+                      onValueChange={(id) => updateRow(index, { itemId: id })}
+                      onEnterClosed={() => qtyRefs.current[index]?.focus()}
+                      id={`bill-item-${index}`}
+                    />
+                  </div>
+                  <input
+                    ref={(el) => {
+                      qtyRefs.current[index] = el
+                    }}
+                    type="number"
+                    value={row.quantity}
+                    onChange={(e) => updateRow(index, { quantity: e.target.value })}
+                    min="1"
+                    inputMode="numeric"
+                    aria-label={`Quantity row ${index + 1}`}
+                    onKeyDown={(e) => handleQtyKeyDown(e, index)}
+                    className="col-span-6 rounded-lg border border-slate-300 px-2 py-2 text-sm outline-none focus:border-blue-500 sm:col-span-3"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRow(index)}
+                    disabled={rows.length === 1}
+                    className="col-span-6 rounded-lg border border-slate-300 px-2 py-2 text-xs text-slate-600 disabled:opacity-40 sm:col-span-2"
+                  >
+                    Remove
+                  </button>
+                </div>
+                {stockWarn && <p className="text-xs font-medium text-amber-700">{stockWarn}</p>}
+                <button
+                  type="button"
+                  onClick={() => openQuickAdd(index)}
+                  className="text-sm font-medium text-blue-600"
+                >
+                  + Add New Item
+                </button>
+              </div>
+            )
+          })}
 
           <button
             type="button"
@@ -281,9 +247,8 @@ function BillingPage() {
             + Add Item Row
           </button>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <select
-              ref={paymentMethodRef}
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
@@ -304,7 +269,7 @@ function BillingPage() {
             disabled={loading}
             className="w-full rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-60"
           >
-            {loading ? 'Generating Bill...' : 'Generate Bill'}
+            {loading ? 'Generating Bill…' : 'Generate Bill'}
           </button>
         </form>
       </PageCard>
@@ -312,42 +277,32 @@ function BillingPage() {
       {result && (
         <PageCard title={`Bill Created: ${result.billId}`}>
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-slate-700">
-              Total Amount: Rs {result.totalAmount}
-            </p>
+            <p className="text-sm font-semibold text-slate-700">Total Amount: Rs {result.totalAmount}</p>
             <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs whitespace-pre-wrap text-slate-100">
               {result.receiptText}
             </pre>
-
-            <div className="space-y-2 pt-1">
-              <AlertBox message={printError} />
-              <AlertBox message={printSuccess} tone="success" />
-
+            <AlertBox message={printError} />
+            <AlertBox message={printMessage} tone="success" />
+            <div className="flex flex-col gap-2 sm:flex-row">
               <button
                 type="button"
                 onClick={handlePrint}
-                disabled={printing}
-                className="w-full rounded-lg bg-emerald-600 px-4 py-2 font-medium text-white disabled:opacity-60"
+                disabled={printLoading}
+                className="rounded-lg border border-slate-800 bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
               >
-                {printing ? 'Printing...' : 'Print Bill'}
+                {printLoading ? 'Printing…' : 'Print Bill'}
               </button>
-
-              {!deviceToken && (
-                <p className="text-xs text-slate-500">
-                  Register/select a printing device in `Devices` first.
-                </p>
+              {!getPrintDeviceToken() && (
+                <Link to="/app/profile" className="self-center text-sm font-medium text-blue-600">
+                  Set print token in Profile
+                </Link>
               )}
             </div>
           </div>
         </PageCard>
       )}
 
-      <QuickAddItemModal
-        open={quickAddOpen}
-        onClose={() => setQuickAddOpen(false)}
-        onCreate={handleQuickAddCreate}
-        submitting={quickAddSubmitting}
-      />
+      <QuickAddItemModal open={quickAddOpen} onClose={closeQuickAdd} onCreated={handleQuickAddCreated} />
     </>
   )
 }
